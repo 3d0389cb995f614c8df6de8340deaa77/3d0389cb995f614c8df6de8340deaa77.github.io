@@ -52,6 +52,16 @@ label.f{display:block;font-size:.82rem;font-weight:600;color:var(--mut);margin:1
 .ibtn{width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);display:grid;place-items:center;color:#fff}
 .ibtn svg{width:21px;height:21px}
 .spin svg{animation:spin .8s linear infinite}
+.ibtn{position:relative}
+.ibtn .bdg{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border-radius:99px;background:#E53935;color:#fff;font-size:.72rem;font-weight:800;display:grid;place-items:center}
+.err.info{color:var(--ink2)}
+.dv{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.dv small{display:block;color:var(--mut);font-size:.78rem;line-height:1.35;overflow-wrap:anywhere}
+.dv .pill{display:inline-block;margin-left:6px;max-width:none}
+.dvb{display:flex;flex-direction:column;gap:6px;flex:none}
+.dvb button{min-height:40px;padding:0 12px;border-radius:10px;border:1.5px solid #B8C8D3;background:#fff;font-weight:700;font-size:.82rem}
+.dvb .ok{background:var(--green);border-color:var(--green);color:#fff}
+.dvb .no{color:var(--red);border-color:#E3A9A4}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- header ---------- */
@@ -171,6 +181,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding
       <div class="hrow">
         <div><b id="hname"></b><small id="hrole"></small></div>
         <div class="hbtns">
+          <button id="dev" class="ibtn" type="button" aria-label="Approve phones" hidden></button>
           <button id="ref" class="ibtn" type="button" aria-label="Refresh"></button>
           <button id="out" class="ibtn" type="button" aria-label="Log out"></button>
         </div>
@@ -218,11 +229,25 @@ var ICON = {
   out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M16 8l4 4-4 4"/><path d="M20 12H9"/></svg>',
   call: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',
   wa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.6-2.1-1-.9.8c-1-.4-2-1.4-2.4-2.4l.8-.9-1-2.1z" fill="currentColor" stroke="none"/></svg>',
+  dev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg>',
   find: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   tube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/></svg>'
 };
-$('ref').innerHTML = ICON.ref; $('out').innerHTML = ICON.out;
+$('dev').innerHTML = ICON.dev; $('ref').innerHTML = ICON.ref; $('out').innerHTML = ICON.out;
 document.querySelector('.find').insertAdjacentHTML('afterbegin', ICON.find);
+
+/* Each phone gets a private random ID the first time. The admin approves the phone once; a PIN alone is not enough. */
+var memDev = '';
+function devId() {
+  var v = '';
+  try { v = localStorage.getItem('lab_dev') || ''; } catch (e) {}
+  if (!/^[a-f0-9]{32}$/.test(v)) {
+    var a = new Uint8Array(16); (window.crypto || window.msCrypto).getRandomValues(a);
+    v = Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    try { localStorage.setItem('lab_dev', v); } catch (e) { memDev = memDev || v; v = memDev; }
+  }
+  return v;
+}
 
 /* ---------- talking to the server ---------- */
 function api(body) {
@@ -239,25 +264,25 @@ function netErr(e) { if (e && e.message === 'auth') return; toast('No reply from
 /* ---------- sign in / out ---------- */
 function login(ev) {
   ev.preventDefault();
-  $('lerr').textContent = ''; $('go').disabled = true; $('go').textContent = 'Signing in…';
-  fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'login', who: $('who').value, pin: $('pin').value }) })
+  $('lerr').className = 'err'; $('lerr').textContent = ''; $('go').disabled = true; $('go').textContent = 'Signing in…';
+  fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'login', who: $('who').value, pin: $('pin').value, dev: devId(), info: (navigator.userAgent || '').slice(0, 80) }) })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       $('go').disabled = false; $('go').textContent = 'Sign in';
-      if (!j.ok) { $('lerr').textContent = j.error || 'Could not sign in'; $('pin').select(); return; }
+      if (!j.ok) { $('lerr').className = 'err' + (j.pending ? ' info' : ''); $('lerr').textContent = j.error || 'Could not sign in'; if (!j.pending) $('pin').select(); else $('pin').value = ''; return; }
       S.token = j.token; S.me = j; store(JSON.stringify({ token: j.token, me: j })); $('pin').value = ''; start();
     }).catch(function () { $('go').disabled = false; $('go').textContent = 'Sign in'; $('lerr').textContent = 'No reply from server. Check your internet.'; });
 }
 function logout(msg) {
   S.token = ''; S.me = null; S.loaded = false; S.seen = null; S.days = { 0: [], 1: [] }; S.hot = {}; S.otp = {};
   store(null); closeSheet(); $('app').hidden = true; $('login').hidden = false; $('list').innerHTML = '';
-  $('lerr').textContent = msg || '';
+  $('lerr').className = 'err'; $('lerr').textContent = msg || '';
 }
 function start() {
   $('login').hidden = true; $('app').hidden = false;
   $('hname').textContent = S.me.name;
   $('hrole').textContent = S.me.admin ? 'Admin · all bookings' : 'Technician · your bookings';
-  S.last = Date.now(); skeleton(); refresh();
+  $('dev').hidden = !S.me.admin; S.last = Date.now(); skeleton(); refresh();
 }
 
 /* ---------- loading ---------- */
@@ -269,8 +294,12 @@ function refresh() {
     S.loading = false; $('ref').classList.remove('spin');
     if (!j.ok) return toast(j.error || 'Could not load');
     S.days = { 0: j.days[0] || [], 1: j.days[1] || [] };
-    announceNew(); S.loaded = true; render();
+    badge(j.pend || 0); announceNew(); S.loaded = true; render();
   }).catch(function (e) { S.loading = false; $('ref').classList.remove('spin'); netErr(e); if (!S.loaded) $('list').innerHTML = '<div class="empty">Could not load. Tap refresh.</div>'; });
+}
+function badge(n) {
+  var b = $('dev'), old = b.querySelector('.bdg'); if (old) old.remove();
+  if (n > 0) { var e = document.createElement('span'); e.className = 'bdg'; e.textContent = n; b.appendChild(e); }
 }
 /* A booking number we have not seen before = a new booking: tell the admin */
 function announceNew() {
@@ -426,6 +455,26 @@ function historySheet(no) {
     el.outerHTML = j.history.length ? '<ul class="hlist">' + j.history.map(function (x) { return '<li><time>' + esc(x.t) + '</time><div>' + esc(x.a) + '<br><span>' + esc(x.by) + '</span></div></li>'; }).join('') + '</ul>' : '<p>No history yet.</p>';
   }).catch(netErr);
 }
+function devHtml(list) {
+  if (!list.length) return '<p>No phones yet.</p>';
+  return list.map(function (d) {
+    var cl = d.status === 'Approved' ? 's-confirmed' : d.status === 'Blocked' ? 's-cancelled' : 's-pending';
+    var b = '';
+    if (d.status !== 'Approved') b += '<button type="button" class="ok" data-dk="' + esc(d.k) + '" data-ds="Approved">Approve</button>';
+    if (d.status !== 'Blocked' && !d.mine) b += '<button type="button" class="no" data-dk="' + esc(d.k) + '" data-ds="Blocked">Block</button>';
+    if (!d.mine) b += '<button type="button" data-dk="' + esc(d.k) + '" data-ds="Remove">Remove</button>';
+    return '<div class="dv"><div><b>' + esc(d.name) + '</b><span class="pill ' + cl + '">' + esc(d.status) + '</span>' + (d.mine ? '<small>This phone</small>' : '') +
+      '<small>' + esc(d.info || 'Unknown phone') + '</small><small>First seen ' + esc(d.first) + ', last ' + esc(d.last) + '</small></div><div class="dvb">' + b + '</div></div>';
+  }).join('');
+}
+function devicesSheet() {
+  openSheet('Phones', '<p>A phone can use the app only after you approve it. Approve only the staff phones you know.</p><div id="dvl">Loading…</div>', [{ label: 'Close' }]);
+  api({ action: 'devices' }).then(function (j) {
+    var el = $('dvl'); if (!el) return;
+    if (!j.ok) { el.textContent = j.error || 'Could not load'; return; }
+    el.innerHTML = devHtml(j.devices); badge(j.pend || 0);
+  }).catch(netErr);
+}
 function doAct(no, st) {
   var r = findRow(no); if (!r || r.status === st) return;
   if (st === 'Sample Collected') return otpSheet(r);
@@ -434,6 +483,16 @@ function doAct(no, st) {
 }
 
 document.addEventListener('click', function (e) {
+  var dk = e.target.closest('[data-dk]');
+  if (dk) {
+    var k = dk.getAttribute('data-dk'), st = dk.getAttribute('data-ds'); dk.disabled = true;
+    api({ action: 'deviceSet', k: k, status: st }).then(function (j) {
+      var el = $('dvl'); if (!el) return;
+      if (!j.ok) { toast(j.error || 'Could not save'); dk.disabled = false; return; }
+      el.innerHTML = devHtml(j.devices); badge(j.pend || 0); toast('Saved: ' + st);
+    }).catch(function (er) { dk.disabled = false; netErr(er); });
+    return;
+  }
   var f = e.target.closest('[data-f]'); if (f) { S.filter = f.getAttribute('data-f'); return render(); }
   var el = e.target.closest('[data-a]'); if (!el || el.tagName === 'SELECT') return;
   var cd = el.closest('.card'); if (!cd) return;
@@ -461,6 +520,7 @@ document.addEventListener('change', function (e) {
 $('loginForm').addEventListener('submit', login);
 $('out').onclick = function () { logout(); };
 $('ref').onclick = refresh;
+$('dev').onclick = devicesSheet;
 $('q').addEventListener('input', function () { S.q = this.value; render(); });
 ['t0', 't1'].forEach(function (id, i) {
   $(id).onclick = function () {
