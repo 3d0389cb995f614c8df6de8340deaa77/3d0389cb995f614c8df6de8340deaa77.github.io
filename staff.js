@@ -3,7 +3,7 @@
 /* Clickjacking guard: if another site puts this page in a frame, hide it and try to break out. */
 try { if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.self.location; } catch (e2) {} } } catch (e) { document.documentElement.style.display = 'none'; }
 /* 1) YOUR WEB APP URL (ends with /exec) */
-var API_URL = 'https://script.google.com/macros/s/AKfycbzZ4o-VgT197_sXznDjs1w6-RaVSUStVLdVOI7hwjNub74RE9BDVZcGBmHLqJVPKLiT/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyG-pmN4C4GTtt7XSPjm2EpyHtpupz4zDbJReys89k57tw0x7rnnPk-clGEaYpy50Zz/exec';
 var CC = '91';
 var STATUSES = ['Pending', 'Confirmed', 'Called', 'Visited - Unavailable', 'Sample Collected', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var LIVE = ['Confirmed', 'Called', 'Visited - Unavailable'];      // the OTP exists from these statuses on
