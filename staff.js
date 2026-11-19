@@ -68,7 +68,7 @@ function login(ev) {
     }).catch(function () { $('go').disabled = false; $('go').textContent = 'Sign in'; $('lerr').textContent = 'No reply from server. Check your internet.'; });
 }
 function logout(msg) {
-  S.token = ''; S.me = null; S.loaded = false; S.seen = null; S.days = { 0: [], 1: [] }; S.hot = {}; S.otp = {};
+  S.token = ''; S.me = null; S.loaded = false; S.seen = null; S.days = { 0: [], 1: [] }; S.otp = {};
   store(null); closeSheet(); $('app').hidden = true; $('login').hidden = false; $('list').innerHTML = '';
   $('lerr').textContent = msg || '';
 }
@@ -132,13 +132,12 @@ function card(r) {
   var h = '<article class="card ' + cls(r.status) + (S.busy[r.no] ? ' busy' : '') + (S.fresh[r.no] ? ' fresh' : '') + '" data-no="' + esc(r.no) + '">' +
     '<div class="head"><div class="seq" aria-hidden="true">' + esc(r.seq) + '</div>' +
     '<div class="who"><h3>' + esc(r.name) + '</h3><div class="meta"><span>' + esc(r.age) + ' yrs' + (r.gender ? ', ' + esc(r.gender) : '') + '</span><span>' + ago(r.ts) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + '</div></div>' +
-    '<span class="pill">' + esc(r.status) + '</span></div>' +
+    '<span class="pill" data-a="wa" title="Tap to message the patient again">' + esc(r.status) + '</span></div>' +
     '<p class="bno">' + esc(r.no) + '</p>' +
     '<p class="loc">' + place + '</p>' +
     '<p class="tests' + (S.open[r.no] ? ' open' : '') + '" data-a="tests">' + esc(r.tests || '-') + '</p>' +
     (r.assigned ? '<p class="asg">Assigned to <b>' + esc(r.assigned) + '</b></p>' : '<p class="asg no">Not assigned</p>') +
-    '<div class="line"><a class="btn" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + 'Call</a>' +
-    '<button class="btn wa' + (S.hot[r.no] ? ' hot' : '') + '" type="button" data-a="wa">' + ICON.wa + esc(r.waLabel) + '</button></div>';
+    '<div class="line"><a class="btn" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + 'Call</a></div>';
   var acts = actionsFor(r);
   if (acts.length) {
     var mainOnly = acts.filter(function (x) { return x.kind === 'main'; }), rest = acts.filter(function (x) { return x.kind !== 'main'; });
@@ -246,8 +245,9 @@ function setStatus(no, st, otp) {
   return api({ action: 'setStatus', no: no, status: st, otp: otp }).then(function (j) {
     delete S.busy[no];
     if (!j.ok) { render(); if (j.otp !== false) toast(j.error || 'Could not save'); return j; }
-    replaceRow(j.row); S.hot[no] = 1; render();
-    toast('Saved: ' + j.status + '. Tap WhatsApp to message the patient.');
+    replaceRow(j.row); render();
+    toast('Saved: ' + j.status + '. Opening WhatsApp…');
+    setTimeout(function () { autoWa(j.row); }, 60);       // after any sheet has closed
     return j;
   }).catch(function (e) { delete S.busy[no]; render(); netErr(e); return { ok: false, error: 'network' }; });
 }
@@ -269,9 +269,18 @@ function otpSheet(r) {
 function askSheet(title, text, yes, kind, fn) {
   openSheet(title, '<p>' + text + '</p>', [{ label: yes, kind: kind, fn: function () { closeSheet(); fn(); } }, { label: 'Go back' }]);
 }
+function waUrl(r, msg) { return 'https://wa.me/' + CC + digits(r.phone) + '?text=' + encodeURIComponent(msg); }
+/* Runs by itself after every saved status change. If the phone blocks the automatic opening, a sheet with one big button appears instead. */
+function autoWa(r) {
+  if (r.edit) return openWa(r);                       // cancellation text can be edited first, so it needs one tap anyway
+  var w = null; try { w = window.open(waUrl(r, r.msg), '_blank'); } catch (e) {}
+  if (w) { try { w.opener = null; } catch (e2) {} return; }
+  openSheet('Message ' + r.name, '<p>Tap the button to send the WhatsApp message to the patient.</p>',
+    [{ label: 'Open WhatsApp', kind: 'main', fn: function () { closeSheet(); openWa(r); } }, { label: 'Later' }]);
+}
 function openWa(r) {
-  var url = function (msg) { return 'https://wa.me/' + CC + digits(r.phone) + '?text=' + encodeURIComponent(msg); };
-  var go = function (msg) { var a = document.createElement('a'); a.href = url(msg); a.target = '_blank'; a.rel = 'noopener noreferrer'; document.body.appendChild(a); a.click(); a.remove(); delete S.hot[r.no]; render(); };
+  var url = function (msg) { return waUrl(r, msg); };
+  var go = function (msg) { var a = document.createElement('a'); a.href = url(msg); a.target = '_blank'; a.rel = 'noopener noreferrer'; document.body.appendChild(a); a.click(); a.remove(); };
   if (r.edit) {      // cancellation message: staff may change the words
     openSheet('Cancellation message', '<p>You can change the message before sending.</p><textarea id="waTxt" aria-label="Message to patient">' + esc(r.msg) + '</textarea>',
       [{ label: 'Open WhatsApp', kind: 'main', fn: function () { var v = $('waTxt').value.trim(); if (!v) return; closeSheet(); go(v.slice(0, 1500)); } }, { label: 'Cancel' }]);

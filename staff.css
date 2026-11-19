@@ -87,6 +87,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding
 .who h3{margin:0;font-size:1.1rem;line-height:1.25;overflow-wrap:anywhere}
 .meta{display:flex;flex-wrap:wrap;gap:2px 12px;color:var(--mut);font-size:.84rem;margin-top:2px}
 .meta .new{color:#fff;background:var(--red);font-weight:800;font-size:.7rem;padding:1px 8px;border-radius:99px;align-self:center}
+.pill[data-a]{cursor:pointer}
 .pill{flex:none;max-width:42%;padding:4px 10px;border-radius:99px;font-size:.74rem;font-weight:800;background:var(--bg);color:var(--fg);text-align:center;line-height:1.25}
 .bno{margin:10px 0 0;font-size:.78rem;color:var(--mut);letter-spacing:.02em}
 .loc{margin:6px 0 0;font-weight:600}
@@ -96,7 +97,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding
 .asg{margin:8px 0 0;font-size:.85rem;color:var(--mut)}
 .asg.no{color:#8A5A00;font-weight:700}
 .asg b{color:var(--txt)}
-.line{display:grid;grid-template-columns:1fr 1.5fr;gap:8px;margin-top:12px}
+.line{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px}
 .acts{display:grid;gap:8px;margin-top:8px}
 .acts.two{grid-template-columns:1fr 1fr}
 .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
