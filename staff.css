@@ -121,6 +121,10 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding
 .sheet .btns{display:grid;gap:8px;margin-top:16px}
 .otp{width:100%;height:68px;text-align:center;font-size:2rem;font-weight:800;letter-spacing:.55em;padding-left:.55em;border:2px solid #B8C8D3;border-radius:14px;margin-top:10px}
 .otp:focus{border-color:var(--ink2);outline:none;box-shadow:0 0 0 4px rgba(20,80,111,.15)}
+.addp{margin:12px 0 4px}
+.nf label.f:first-of-type{margin-top:4px}
+.nf .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sheet textarea.ta{min-height:96px}
 .sheet textarea{width:100%;min-height:210px;border:1.5px solid #B8C8D3;border-radius:12px;padding:12px;font-size:16px;line-height:1.45;resize:vertical}
 .hlist{list-style:none;margin:10px 0 0;padding:0}
 .hlist li{display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:.9rem}

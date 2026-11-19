@@ -277,6 +277,39 @@ function openWa(r) {
       [{ label: 'Open WhatsApp', kind: 'main', fn: function () { var v = $('waTxt').value.trim(); if (!v) return; closeSheet(); go(v.slice(0, 1500)); } }, { label: 'Cancel' }]);
   } else go(r.msg);
 }
+/* ---------- new patient (admin and technicians): plain form, the lab gets the details by e-mail ---------- */
+function newPatientSheet() {
+  var f = function (id, label, attrs) { return '<label class="f" for="' + id + '">' + label + '</label><input id="' + id + '" class="in" ' + attrs + '>'; };
+  openSheet('New patient',
+    '<div class="nf">' +
+    f('npName', 'Patient name *', 'type="text" maxlength="60" autocomplete="off" autocapitalize="words"') +
+    '<div class="two"><div>' + f('npAge', 'Age *', 'type="text" inputmode="numeric" maxlength="3" autocomplete="off"') + '</div>' +
+    '<div><label class="f" for="npGen">Gender</label><select id="npGen" class="in"><option value="">-</option><option>Male</option><option>Female</option><option>Other</option></select></div></div>' +
+    f('npPhone', 'Mobile number *', 'type="tel" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="10 digits"') +
+    f('npDoc', 'Doctor', 'type="text" maxlength="60" autocomplete="off"') +
+    f('npArea', 'Area', 'type="text" maxlength="60" autocomplete="off"') +
+    f('npLand', 'Landmark', 'type="text" maxlength="60" autocomplete="off"') +
+    '<label class="f" for="npTests">Tests *</label><textarea id="npTests" class="ta" maxlength="600" aria-label="Tests"></textarea>' +
+    '<label class="f" for="npDay">For</label><select id="npDay" class="in"><option value="0">Today</option><option value="1">Tomorrow</option></select>' +
+    '<p class="err" id="npErr" role="alert"></p></div>',
+    [{ label: 'Save patient', kind: 'main', fn: function (el) {
+        var v = function (id) { return $(id).value.trim(); }, err = $('npErr');
+        if (!/^[A-Za-z\u00C0-\u024F\u0900-\u0DFF][^0-9<>]{1,59}$/.test(v('npName'))) { err.textContent = 'Enter the patient name.'; return; }
+        if (!/^\d{1,3}$/.test(v('npAge'))) { err.textContent = 'Enter the age.'; return; }
+        if (digits(v('npPhone')).length !== 10) { err.textContent = 'Enter a 10 digit mobile number.'; return; }
+        if (v('npTests').length < 2) { err.textContent = 'Enter the tests.'; return; }
+        err.textContent = ''; el.disabled = true; el.textContent = 'Saving…';
+        api({ action: 'addBooking', name: v('npName'), age: v('npAge'), gender: $('npGen').value, phone: v('npPhone'), doctor: v('npDoc'), area: v('npArea'), landmark: v('npLand'), tests: v('npTests'), day: $('npDay').value })
+          .then(function (j) {
+            if (!j.ok) { el.disabled = false; el.textContent = 'Save patient'; err.textContent = j.error || 'Could not save'; return; }
+            var d = +$('npDay').value;
+            S.days[d] = [j.row].concat(S.days[d] || []);
+            if (S.seen) S.seen[j.row.no] = 1;
+            closeSheet(); setDay(d); toast('Saved. Details sent to the lab by e-mail.');
+          }).catch(function (e) { el.disabled = false; el.textContent = 'Save patient'; if (!e || e.message !== 'auth') err.textContent = 'No reply from server. Check your internet.'; });
+      } },
+     { label: 'Cancel' }]);
+}
 function historySheet(no) {
   openSheet('History', '<p id="hl">Loading…</p>', [{ label: 'Close' }]);
   api({ action: 'history', no: no }).then(function (j) {
@@ -322,14 +355,14 @@ $('out').onclick = function () { logout(); };
 $('ref').onclick = refresh;
 $('dev').onclick = devicesSheet;
 $('q').addEventListener('input', function () { S.q = this.value; render(); });
-['t0', 't1'].forEach(function (id, i) {
-  $(id).onclick = function () {
-    S.day = i; S.filter = 'All';
-    $('t0').className = i ? '' : 'on'; $('t1').className = i ? 'on' : '';
-    $('t0').setAttribute('aria-selected', String(!i)); $('t1').setAttribute('aria-selected', String(!!i));
-    render();
-  };
-});
+function setDay(i) {
+  S.day = i; S.filter = 'All';
+  $('t0').className = i ? '' : 'on'; $('t1').className = i ? 'on' : '';
+  $('t0').setAttribute('aria-selected', String(!i)); $('t1').setAttribute('aria-selected', String(!!i));
+  render();
+}
+['t0', 't1'].forEach(function (id, i) { $(id).onclick = function () { setDay(i); }; });
+$('add').onclick = newPatientSheet;
 ['pointerdown', 'keydown', 'scroll'].forEach(function (ev) { window.addEventListener(ev, function () { S.last = Date.now(); }, { passive: true, capture: true }); });
 setInterval(function () {
   if (!S.token) return;
