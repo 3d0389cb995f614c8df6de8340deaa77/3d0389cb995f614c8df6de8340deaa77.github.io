@@ -163,3 +163,47 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;padding
 .dv .st.Blocked{background:#F8D7DA;color:var(--red)}
 .dv .row{display:flex;gap:8px;margin-top:8px}
 .dv .row .btn{min-height:40px;flex:1;font-size:.85rem;padding:0 8px}
+
+/* ---------- v5: compact cards + Pick up / Open / Closed sections ---------- */
+.chips{padding:8px 0 6px}
+.find{margin:2px 0 8px}
+.find input{height:42px}
+.find svg{top:10px}
+.addp{margin:10px 0 2px;min-height:44px}
+
+.sec{margin-bottom:6px}
+.sech{display:flex;align-items:center;gap:8px;padding:10px 2px 6px}
+.sech h2{margin:0;font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.sech b{font-size:.72rem;min-width:22px;height:20px;padding:0 7px;border-radius:99px;background:#D3E0E9;color:var(--ink);display:inline-grid;place-items:center}
+.sech[data-sec]{cursor:pointer;-webkit-user-select:none;user-select:none}
+.sech .chev{margin-left:auto}
+.sech .chev.up{transform:rotate(180deg)}
+.sec.pick .sech h2{color:#1F5FA3}
+.sec.pick .sech b{background:#2F7CC1;color:#fff}
+.sec.closed .sech h2{color:var(--mut)}
+
+.card{margin-bottom:6px;padding:7px 10px 7px 14px;border-radius:12px}
+.card::before{width:4px}
+.card .top{cursor:pointer;-webkit-user-select:none;user-select:none;gap:8px}
+.seq{min-width:30px;height:30px;border-radius:9px;font-size:.84rem}
+.who h3{font-size:.92rem}
+.sub{font-size:.72rem}
+.pill{font-size:.66rem;padding:2px 8px 2px 7px}
+.chev{width:16px;height:16px}
+.card.min{padding-top:7px;padding-bottom:7px}
+.card.min .seq{min-width:30px;height:30px;font-size:.84rem}
+.card.s-sample-collected.min,.card.s-cancelled.min,.card.s-visited-unavailable.min{padding-top:5px;padding-bottom:5px;opacity:.85}
+.card.s-sample-collected.min .seq,.card.s-cancelled.min .seq,.card.s-visited-unavailable.min .seq{min-width:26px;height:26px;font-size:.76rem;border-radius:8px}
+.mini{margin:4px 0 0 38px;font-size:.76rem;color:#3B5160;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ra.q{margin:5px 0 0 38px;gap:6px}
+.ra.q .ib{width:36px;height:36px;border-radius:10px}
+.ra.q .ib svg{width:17px;height:17px}
+.ra.q .btn{min-height:36px;font-size:.82rem;padding:0 8px;border-radius:10px}
+.body{margin-top:6px}
+.loc{font-size:.82rem}
+.tests{font-size:.79rem;margin-top:5px;padding:5px 8px}
+.tags{margin-top:5px}
+.ra{margin-top:7px}
+.ra .btn{min-height:38px}
+.ib{width:38px;height:38px}
+.sk{height:62px;margin-bottom:6px}

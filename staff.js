@@ -8,13 +8,15 @@ var CC = '91';
 var STATUSES = ['Pending', 'Confirmed', 'Called', 'Visited - Unavailable', 'Sample Collected', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var LIVE = ['Confirmed', 'Called', 'Visited - Unavailable'];      // the OTP exists from these statuses on
 var TECH_LIVE = ['Confirmed', 'Called'];                           // a technician can collect the sample only from these (after "not available" only the admin can change it)
-var COLLAPSE = ['Sample Collected', 'Cancelled', 'Visited - Unavailable'];   // these cards show as one small row until tapped
+var CLOSED = ['Sample Collected', 'Cancelled', 'Visited - Unavailable'];   // these bookings go to the "Closed" section
+var SECS = [{ k: 'pick', t: 'Pick up' }, { k: 'open', t: 'Open' }, { k: 'closed', t: 'Closed' }];
+function secOf(r) { return r.status === 'Pending' ? 'pick' : CLOSED.indexOf(r.status) > -1 ? 'closed' : 'open'; }   // new booking = Pick up, finished = Closed, everything else = Open
 var DONE_FOR_TECH = ['Visited - Unavailable', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var SHORT = { 'Visited - Unavailable': 'Not available' };
 var IDLE_MIN = 30;                                                   // locks after 30 minutes of no use
 var KEY = 'lab_staff_v2';
 
-var S = { token: '', me: null, day: 0, days: { 0: [], 1: [] }, filter: 'All', q: '', loaded: false, seen: null, hot: {}, otp: {}, open: {}, exp: {}, busy: {}, fresh: {}, last: Date.now(), loading: false };
+var S = { token: '', me: null, day: 0, days: { 0: [], 1: [] }, filter: 'All', q: '', loaded: false, seen: null, hot: {}, otp: {}, open: {}, exp: {}, shut: { closed: true }, busy: {}, fresh: {}, last: Date.now(), loading: false };
 var $ = function (id) { return document.getElementById(id); };
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function cls(s) { return 's-' + String(s).toLowerCase().replace(/[^a-z]+/g, '-'); }
@@ -134,21 +136,25 @@ function ago(ts) {
 }
 function card(r) {
   var me = S.me, tel = '+' + CC + digits(r.phone), isNew = r.status === 'Pending' && Date.now() - r.ts < 15 * 60000;
-  var fold = COLLAPSE.indexOf(r.status) > -1, min = fold && !S.exp[r.no];
+  var min = !S.exp[r.no], closed = CLOSED.indexOf(r.status) > -1;
   var place = r.area ? esc(r.area) + (r.landmark ? ' <small>near ' + esc(r.landmark) + '</small>' : '') : (r.landmark ? 'Near ' + esc(r.landmark) : 'No address given');
-  var sub = min ? esc(r.area || 'No address') + ' · ' + ago(r.ts) : esc(r.age) + ' yrs' + (r.gender ? ' · ' + esc(r.gender) : '') + ' · ' + ago(r.ts);
+  var sub = min ? esc(r.age) + ' yrs' + (r.area ? ' · ' + esc(r.area) : '') + ' · ' + ago(r.ts) : esc(r.age) + ' yrs' + (r.gender ? ' · ' + esc(r.gender) : '') + ' · ' + ago(r.ts);
+  var acts = actionsFor(r), mainOnly = acts.filter(function (x) { return x.kind === 'main'; }), rest = acts.filter(function (x) { return x.kind !== 'main'; });
+  var quick = '<a class="ib" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + '</a>' +
+    (r.msg ? '<button class="ib wa" type="button" data-a="wa" aria-label="WhatsApp message to ' + esc(r.name) + '">' + ICON.wa + '</button>' : '');
   var h = '<article class="card ' + cls(r.status) + (min ? ' min' : '') + (S.busy[r.no] ? ' busy' : '') + (S.fresh[r.no] ? ' fresh' : '') + '" data-no="' + esc(r.no) + '">' +
-    '<div class="top"' + (fold ? ' data-a="tog" role="button" tabindex="0" aria-expanded="' + (!min) + '"' : '') + '>' +
+    '<div class="top" data-a="tog" role="button" tabindex="0" aria-expanded="' + (!min) + '">' +
     '<div class="seq" aria-hidden="true">' + esc(r.seq) + '</div>' +
     '<div class="who"><h3><span class="nm">' + esc(r.name) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + '</h3><p class="sub">' + sub + '</p></div>' +
-    '<span class="pill">' + esc(SHORT[r.status] || r.status) + '</span>' + (fold ? '<span class="chev" aria-hidden="true">' + ICON.chev + '</span>' : '') + '</div>';
-  if (min) return h + '</article>';
+    '<span class="pill">' + esc(SHORT[r.status] || r.status) + '</span><span class="chev" aria-hidden="true">' + ICON.chev + '</span></div>';
+  if (min) {
+    if (closed) return h + '</article>';                       // closed cards: one thin row
+    return h + '<p class="mini">' + esc(r.tests || '-') + '</p><div class="ra q">' + quick + mainOnly.map(btnHtml).join('') + '</div></article>';
+  }
   h += '<div class="body"><p class="loc">' + ICON.pin + '<span>' + place + '</span></p>' +
     '<p class="tests' + (S.open[r.no] ? ' open' : '') + '" data-a="tests">' + esc(r.tests || '-') + '</p>' +
     '<div class="tags"><span class="tag">' + esc(r.no) + '</span>' + (r.assigned ? '<span class="tag asg">' + esc(r.assigned) + '</span>' : '<span class="tag no">Not assigned</span>') + '</div>';
-  var acts = actionsFor(r), mainOnly = acts.filter(function (x) { return x.kind === 'main'; }), rest = acts.filter(function (x) { return x.kind !== 'main'; });
-  h += '<div class="ra"><a class="ib" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + '</a>' +
-    (r.msg ? '<button class="ib wa" type="button" data-a="wa" aria-label="WhatsApp message to ' + esc(r.name) + '">' + ICON.wa + '</button>' : '') + mainOnly.map(btnHtml).join('') + '</div>';
+  h += '<div class="ra">' + quick + mainOnly.map(btnHtml).join('') + '</div>';
   if (rest.length) h += '<div class="ra2' + (rest.length > 1 ? ' two' : '') + '">' + rest.map(btnHtml).join('') + '</div>';
   if (!acts.length && !me.admin) {
     h += '<p class="wait">' + (r.status === 'Pending' ? 'Waiting for the lab to confirm.' : DONE_FOR_TECH.indexOf(r.status) > -1 ? 'Saved. Only the admin can change this now.' : 'Nothing to do here.') + '</p>';
@@ -166,18 +172,28 @@ function btnHtml(x) { return '<button class="btn ' + x.kind + ' full" type="butt
 
 function rowsNow() { return S.days[S.day] || []; }
 function render() {
-  var rows = rowsNow(), c = { All: rows.length };
-  rows.forEach(function (r) { c[r.status] = (c[r.status] || 0) + 1; });
+  var rows = rowsNow(), c = { All: rows.length, pick: 0, open: 0, closed: 0 };
+  rows.forEach(function (r) { c[secOf(r)]++; });
   [0, 1].forEach(function (d) { $('n' + d).textContent = (S.days[d] || []).filter(function (r) { return r.status !== 'Cancelled'; }).length; });
-  var keys = ['All'].concat(STATUSES.filter(function (s) { return c[s]; }));
-  if (S.filter !== 'All' && !c[S.filter]) S.filter = 'All';
-  $('chips').innerHTML = keys.map(function (k) { return '<button class="chip' + (k === S.filter ? ' on' : '') + '" type="button" data-f="' + esc(k) + '" aria-pressed="' + (k === S.filter) + '">' + esc(k) + '<b>' + (c[k] || 0) + '</b></button>'; }).join('');
+  var keys = [{ k: 'All', t: 'All' }].concat(SECS);
+  $('chips').innerHTML = keys.map(function (x) { return '<button class="chip' + (x.k === S.filter ? ' on' : '') + '" type="button" data-f="' + x.k + '" aria-pressed="' + (x.k === S.filter) + '">' + x.t + '<b>' + (c[x.k] || 0) + '</b></button>'; }).join('');
   var q = S.q.trim().toLowerCase();
   var shown = rows.filter(function (r) {
-    return (S.filter === 'All' || r.status === S.filter) && (!q || (r.name + ' ' + r.phone + ' ' + r.no + ' ' + r.area + ' ' + r.tests).toLowerCase().indexOf(q) > -1);
+    return (S.filter === 'All' || secOf(r) === S.filter) && (!q || (r.name + ' ' + r.phone + ' ' + r.no + ' ' + r.area + ' ' + r.tests).toLowerCase().indexOf(q) > -1);
   });
-  $('list').innerHTML = shown.length ? shown.map(card).join('') :
-    '<div class="empty">' + ICON.tube + '<p>' + (rows.length ? 'No bookings match.' : (S.me.admin ? 'No bookings for this day yet.' : 'No bookings assigned to you yet.')) + '</p></div>';
+  if (!shown.length) {
+    $('list').innerHTML = '<div class="empty">' + ICON.tube + '<p>' + (rows.length ? 'No bookings match.' : (S.me.admin ? 'No bookings for this day yet.' : 'No bookings assigned to you yet.')) + '</p></div>';
+  } else {
+    var out = '';
+    SECS.forEach(function (s) {
+      var part = shown.filter(function (r) { return secOf(r) === s.k; });
+      if (!part.length) return;
+      var shut = s.k === 'closed' && S.filter !== 'closed' && !q && S.shut.closed;      // Closed is folded in the "All" view
+      out += '<section class="sec ' + s.k + '"><div class="sech"' + (s.k === 'closed' && S.filter !== 'closed' ? ' data-sec="closed" role="button" tabindex="0" aria-expanded="' + (!shut) + '"' : '') + '><h2>' + s.t + '</h2><b>' + part.length + '</b>' +
+        (s.k === 'closed' && S.filter !== 'closed' ? '<span class="chev' + (shut ? '' : ' up') + '" aria-hidden="true">' + ICON.chev + '</span>' : '') + '</div>' + (shut ? '' : part.map(card).join('')) + '</section>';
+    });
+    $('list').innerHTML = out;
+  }
   S.fresh = {};
 }
 function replaceRow(row) {
@@ -343,6 +359,7 @@ function doAct(no, st) {
 
 document.addEventListener('click', function (e) {
   var f = e.target.closest('[data-f]'); if (f) { S.filter = f.getAttribute('data-f'); return render(); }
+  var sc = e.target.closest('[data-sec]'); if (sc) { S.shut.closed = !S.shut.closed; return render(); }
   var el = e.target.closest('[data-a]'); if (!el || el.tagName === 'SELECT') return;
   var cd = el.closest('.card'); if (!cd) return;
   var no = cd.getAttribute('data-no'), a = el.getAttribute('data-a'), r = findRow(no); if (!r) return;
@@ -354,7 +371,7 @@ document.addEventListener('click', function (e) {
   else if (a === 'tests') { S.open[no] = !S.open[no]; el.classList.toggle('open', !!S.open[no]); }
 });
 document.addEventListener('keydown', function (e) {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute && e.target.getAttribute('data-a') === 'tog') { e.preventDefault(); e.target.click(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute && (e.target.getAttribute('data-a') === 'tog' || e.target.getAttribute('data-sec'))) { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener('change', function (e) {
   var s = e.target.closest('select[data-a]'); if (!s) return;
