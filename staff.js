@@ -7,10 +7,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbzZ4o-VgT197_sXznDjs1w6-R
 var CC = '91';
 var STATUSES = ['Pending', 'Confirmed', 'Called', 'Visited - Unavailable', 'Sample Collected', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var LIVE = ['Confirmed', 'Called', 'Visited - Unavailable'];      // the OTP exists from these statuses on
+var TECH_LIVE = ['Confirmed', 'Called'];                           // a technician can collect the sample only from these (after "not available" only the admin can change it)
+var COLLAPSE = ['Sample Collected', 'Cancelled', 'Visited - Unavailable'];   // these cards show as one small row until tapped
+var DONE_FOR_TECH = ['Visited - Unavailable', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
+var SHORT = { 'Visited - Unavailable': 'Not available' };
 var IDLE_MIN = 30;                                                   // locks after 30 minutes of no use
 var KEY = 'lab_staff_v2';
 
-var S = { token: '', me: null, day: 0, days: { 0: [], 1: [] }, filter: 'All', q: '', loaded: false, seen: null, hot: {}, otp: {}, open: {}, busy: {}, fresh: {}, last: Date.now(), loading: false };
+var S = { token: '', me: null, day: 0, days: { 0: [], 1: [] }, filter: 'All', q: '', loaded: false, seen: null, hot: {}, otp: {}, open: {}, exp: {}, busy: {}, fresh: {}, last: Date.now(), loading: false };
 var $ = function (id) { return document.getElementById(id); };
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function cls(s) { return 's-' + String(s).toLowerCase().replace(/[^a-z]+/g, '-'); }
@@ -37,6 +41,8 @@ var ICON = {
   wa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z"/><path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.6-2.1-1-.9.8c-1-.4-2-1.4-2.4-2.4l.8-.9-1-2.1z" fill="currentColor" stroke="none"/></svg>',
   find: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   dev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
   tube: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/></svg>'
 };
 $('ref').innerHTML = ICON.ref; $('out').innerHTML = ICON.out; $('dev').innerHTML = ICON.dev + '<i class="bdg" id="devn" hidden></i>';
@@ -81,7 +87,7 @@ function start() {
 }
 
 /* ---------- loading ---------- */
-function skeleton() { $('list').innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; }
+function skeleton() { $('list').innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>'; }
 function refresh() {
   if (!S.token || S.loading) return;
   S.loading = true; $('ref').classList.add('spin');
@@ -112,7 +118,7 @@ function announceNew() {
 function actionsFor(r) {
   var admin = S.me.admin, st = r.status, a = [];
   if (admin && st === 'Pending') a.push({ st: 'Confirmed', label: 'Confirm booking', kind: 'main' });
-  if (LIVE.indexOf(st) > -1) a.push({ st: 'Sample Collected', label: 'Sample collected', kind: 'main', otp: true });
+  if ((admin ? LIVE : TECH_LIVE).indexOf(st) > -1) a.push({ st: 'Sample Collected', label: 'Sample collected', kind: 'main', otp: true });
   if (st === 'Sample Collected') a.push({ st: 'Reached Lab', label: 'Reached lab', kind: 'main' });
   if (admin && st === 'Reached Lab') a.push({ st: 'Report Ready', label: 'Report ready', kind: 'main' });
   if (admin && st === 'Report Ready') a.push({ st: 'Completed', label: 'Mark completed', kind: 'main' });
@@ -128,23 +134,24 @@ function ago(ts) {
 }
 function card(r) {
   var me = S.me, tel = '+' + CC + digits(r.phone), isNew = r.status === 'Pending' && Date.now() - r.ts < 15 * 60000;
+  var fold = COLLAPSE.indexOf(r.status) > -1, min = fold && !S.exp[r.no];
   var place = r.area ? esc(r.area) + (r.landmark ? ' <small>near ' + esc(r.landmark) + '</small>' : '') : (r.landmark ? 'Near ' + esc(r.landmark) : 'No address given');
-  var h = '<article class="card ' + cls(r.status) + (S.busy[r.no] ? ' busy' : '') + (S.fresh[r.no] ? ' fresh' : '') + '" data-no="' + esc(r.no) + '">' +
-    '<div class="head"><div class="seq" aria-hidden="true">' + esc(r.seq) + '</div>' +
-    '<div class="who"><h3>' + esc(r.name) + '</h3><div class="meta"><span>' + esc(r.age) + ' yrs' + (r.gender ? ', ' + esc(r.gender) : '') + '</span><span>' + ago(r.ts) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + '</div></div>' +
-    '<span class="pill" data-a="wa" title="Tap to message the patient again">' + esc(r.status) + '</span></div>' +
-    '<p class="bno">' + esc(r.no) + '</p>' +
-    '<p class="loc">' + place + '</p>' +
+  var sub = min ? esc(r.area || 'No address') + ' · ' + ago(r.ts) : esc(r.age) + ' yrs' + (r.gender ? ' · ' + esc(r.gender) : '') + ' · ' + ago(r.ts);
+  var h = '<article class="card ' + cls(r.status) + (min ? ' min' : '') + (S.busy[r.no] ? ' busy' : '') + (S.fresh[r.no] ? ' fresh' : '') + '" data-no="' + esc(r.no) + '">' +
+    '<div class="top"' + (fold ? ' data-a="tog" role="button" tabindex="0" aria-expanded="' + (!min) + '"' : '') + '>' +
+    '<div class="seq" aria-hidden="true">' + esc(r.seq) + '</div>' +
+    '<div class="who"><h3><span class="nm">' + esc(r.name) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + '</h3><p class="sub">' + sub + '</p></div>' +
+    '<span class="pill">' + esc(SHORT[r.status] || r.status) + '</span>' + (fold ? '<span class="chev" aria-hidden="true">' + ICON.chev + '</span>' : '') + '</div>';
+  if (min) return h + '</article>';
+  h += '<div class="body"><p class="loc">' + ICON.pin + '<span>' + place + '</span></p>' +
     '<p class="tests' + (S.open[r.no] ? ' open' : '') + '" data-a="tests">' + esc(r.tests || '-') + '</p>' +
-    (r.assigned ? '<p class="asg">Assigned to <b>' + esc(r.assigned) + '</b></p>' : '<p class="asg no">Not assigned</p>') +
-    '<div class="line"><a class="btn" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + 'Call</a></div>';
-  var acts = actionsFor(r);
-  if (acts.length) {
-    var mainOnly = acts.filter(function (x) { return x.kind === 'main'; }), rest = acts.filter(function (x) { return x.kind !== 'main'; });
-    h += '<div class="acts">' + mainOnly.map(btnHtml).join('') + '</div>';
-    if (rest.length) h += '<div class="acts' + (rest.length > 1 ? ' two' : '') + '">' + rest.map(btnHtml).join('') + '</div>';
-  } else if (!me.admin) {
-    h += '<p class="wait">' + (r.status === 'Pending' ? 'Waiting for the lab to confirm.' : 'Nothing to do here.') + '</p>';
+    '<div class="tags"><span class="tag">' + esc(r.no) + '</span>' + (r.assigned ? '<span class="tag asg">' + esc(r.assigned) + '</span>' : '<span class="tag no">Not assigned</span>') + '</div>';
+  var acts = actionsFor(r), mainOnly = acts.filter(function (x) { return x.kind === 'main'; }), rest = acts.filter(function (x) { return x.kind !== 'main'; });
+  h += '<div class="ra"><a class="ib" href="tel:' + esc(tel) + '" aria-label="Call ' + esc(r.name) + '">' + ICON.call + '</a>' +
+    (r.msg ? '<button class="ib wa" type="button" data-a="wa" aria-label="WhatsApp message to ' + esc(r.name) + '">' + ICON.wa + '</button>' : '') + mainOnly.map(btnHtml).join('') + '</div>';
+  if (rest.length) h += '<div class="ra2' + (rest.length > 1 ? ' two' : '') + '">' + rest.map(btnHtml).join('') + '</div>';
+  if (!acts.length && !me.admin) {
+    h += '<p class="wait">' + (r.status === 'Pending' ? 'Waiting for the lab to confirm.' : DONE_FOR_TECH.indexOf(r.status) > -1 ? 'Saved. Only the admin can change this now.' : 'Nothing to do here.') + '</p>';
   }
   if (me.admin) {
     h += '<div class="tools"><div><label>Assign to</label><select data-a="assign" aria-label="Assign technician"><option value="">Not assigned</option>' +
@@ -153,7 +160,7 @@ function card(r) {
       '<div class="more">' + (r.otp ? (S.otp[r.no] ? '<span class="otpchip" aria-label="OTP ' + esc(r.otp) + '">' + esc(r.otp) + '</span>' : '<button class="link" type="button" data-a="otp">Show OTP</button>') : '') +
       '<button class="link" type="button" data-a="hist">History</button></div>';
   }
-  return h + '</article>';
+  return h + '</div></article>';
 }
 function btnHtml(x) { return '<button class="btn ' + x.kind + ' full" type="button" data-a="act" data-st="' + esc(x.st) + '">' + esc(x.label) + '</button>'; }
 
@@ -245,7 +252,7 @@ function setStatus(no, st, otp) {
   return api({ action: 'setStatus', no: no, status: st, otp: otp }).then(function (j) {
     delete S.busy[no];
     if (!j.ok) { render(); if (j.otp !== false) toast(j.error || 'Could not save'); return j; }
-    replaceRow(j.row); render();
+    delete S.exp[no]; replaceRow(j.row); render();
     toast('Saved: ' + j.status + '. Opening WhatsApp…');
     setTimeout(function () { autoWa(j.row); }, 60);       // after any sheet has closed
     return j;
@@ -286,7 +293,7 @@ function openWa(r) {
       [{ label: 'Open WhatsApp', kind: 'main', fn: function () { var v = $('waTxt').value.trim(); if (!v) return; closeSheet(); go(v.slice(0, 1500)); } }, { label: 'Cancel' }]);
   } else go(r.msg);
 }
-/* ---------- new patient (admin and technicians): plain form, the lab gets the details by e-mail ---------- */
+/* ---------- new patient (admin and technicians): plain form ---------- */
 function newPatientSheet() {
   var f = function (id, label, attrs) { return '<label class="f" for="' + id + '">' + label + '</label><input id="' + id + '" class="in" ' + attrs + '>'; };
   openSheet('New patient',
@@ -314,7 +321,7 @@ function newPatientSheet() {
             var d = +$('npDay').value;
             S.days[d] = [j.row].concat(S.days[d] || []);
             if (S.seen) S.seen[j.row.no] = 1;
-            closeSheet(); setDay(d); toast('Saved. Details sent to the lab by e-mail.');
+            closeSheet(); setDay(d); toast('Patient saved.');
           }).catch(function (e) { el.disabled = false; el.textContent = 'Save patient'; if (!e || e.message !== 'auth') err.textContent = 'No reply from server. Check your internet.'; });
       } },
      { label: 'Cancel' }]);
@@ -341,9 +348,13 @@ document.addEventListener('click', function (e) {
   var no = cd.getAttribute('data-no'), a = el.getAttribute('data-a'), r = findRow(no); if (!r) return;
   if (a === 'act') doAct(no, el.getAttribute('data-st'));
   else if (a === 'wa') openWa(r);
+  else if (a === 'tog') { S.exp[no] = !S.exp[no]; render(); }
   else if (a === 'otp') { S.otp[no] = 1; render(); setTimeout(function () { delete S.otp[no]; if (!document.hidden) render(); }, 20000); }
   else if (a === 'hist') historySheet(no);
   else if (a === 'tests') { S.open[no] = !S.open[no]; el.classList.toggle('open', !!S.open[no]); }
+});
+document.addEventListener('keydown', function (e) {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute && e.target.getAttribute('data-a') === 'tog') { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener('change', function (e) {
   var s = e.target.closest('select[data-a]'); if (!s) return;
