@@ -86,6 +86,7 @@ function start() {
   $('hrole').textContent = S.me.admin ? 'Admin · all bookings' : 'Technician · your bookings';
   $('dev').hidden = !S.me.admin;
   S.last = Date.now(); skeleton(); refresh();
+  if (window.syncAlert) window.syncAlert();
 }
 
 /* ---------- loading ---------- */
@@ -111,6 +112,7 @@ function announceNew() {
     if (fresh.length) {
       toast(fresh.length === 1 ? 'New booking: ' + fresh[0].name : fresh.length + ' new bookings');
       try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (e) {}
+      try { if (document.hidden && window.notifyNew) window.notifyNew('New booking', fresh.length === 1 ? fresh[0].name : fresh.length + ' new bookings'); } catch (e) {}
     }
   }
   S.seen = nos;
@@ -405,10 +407,42 @@ setInterval(function () {
   if (!S.token) return;
   if (Date.now() - S.last > IDLE_MIN * 60000) return logout('Locked after ' + IDLE_MIN + ' minutes. Sign in again.');
   var ae = document.activeElement;
-  if (!document.hidden && $('veil').hidden && !(ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) refresh();
+  if ((!document.hidden || (window.Notification && Notification.permission === 'granted')) && $('veil').hidden && !(ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) refresh();
 }, 20000);
 document.addEventListener('visibilitychange', function () { if (!document.hidden && S.token) refresh(); });
 
 try { localStorage.removeItem('lab_staff'); localStorage.removeItem('lab_staff_v2'); } catch (e) {}      // old version of this page
 try { var saved = JSON.parse(recall() || 'null'); if (saved && saved.token && saved.me) { S.token = saved.token; S.me = saved.me; start(); } } catch (e) { store(null); }
+
+/* ---------- phone app: install shortcut + new-booking alerts ---------- */
+(function () {
+  var dp = null, ua = navigator.userAgent || '';
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var ios = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var canNotify = 'Notification' in window;
+  function showInst() {
+    if (standalone) return;
+    $('inst').hidden = false;
+    $('instBtn').hidden = !dp;
+    $('instHelp').textContent = dp ? 'Adds a shortcut to your home screen.'
+      : ios ? 'iPhone: open this page in Safari, tap the Share button, then tap Add to Home Screen.'
+      : 'Android: tap the browser menu (three dots), then Install app or Add to Home screen.';
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); dp = e; showInst(); });
+  window.addEventListener('appinstalled', function () { dp = null; $('inst').hidden = true; toast('App installed'); });
+  $('instBtn').onclick = function () { if (!dp) return; dp.prompt(); dp.userChoice.then(function () { dp = null; $('instBtn').hidden = true; }); };
+  showInst();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  window.syncAlert = function () { $('alertBar').hidden = !(S.token && canNotify && Notification.permission === 'default'); };
+  $('alertBtn').onclick = function () {
+    if (!canNotify) return;
+    Notification.requestPermission().then(function (p) { window.syncAlert(); if (p === 'granted') toast('Alerts are on'); });
+  };
+  window.notifyNew = function (title, body) {
+    if (!canNotify || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
+    navigator.serviceWorker.ready.then(function (reg) {
+      reg.showNotification(title, { body: body, icon: 'images/icon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
+    });
+  };
+})();
 })();
