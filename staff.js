@@ -3,7 +3,7 @@
 /* Clickjacking guard: if another site puts this page in a frame, hide it and try to break out. */
 try { if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.self.location; } catch (e2) {} } } catch (e) { document.documentElement.style.display = 'none'; }
 /* 1) YOUR WEB APP URL (ends with /exec) */
-var API_URL = 'https://script.google.com/macros/s/AKfycbyrCIno8MjAyMSaEVfLKO-pn4tU7CcKO8QmbMx8y6Vai2BgLEfr7tfTkutxJwmeL1dN/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyG-pmN4C4GTtt7XSPjm2EpyHtpupz4zDbJReys89k57tw0x7rnnPk-clGEaYpy50Zz/exec';
 var CC = '91';
 var STATUSES = ['Pending', 'Confirmed', 'Called', 'Visited - Unavailable', 'Sample Collected', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var LIVE = ['Confirmed', 'Called', 'Visited - Unavailable'];      // the OTP exists from these statuses on
@@ -440,15 +440,19 @@ try { var saved = JSON.parse(recall() || 'null'); if (saved && saved.token && sa
   };
   /* Firebase push: get this phone's token and give it to the server so it can send new-booking alerts */
   window.pushRegister = function () {
-    if (!S.token || !canNotify || Notification.permission !== 'granted' || !window.firebase || !window.FB_CONFIG || /PASTE_/.test(window.FB_CONFIG.apiKey)) return;
-    if (!('serviceWorker' in navigator)) return;
-    try { if (!firebase.apps.length) firebase.initializeApp(window.FB_CONFIG); } catch (e) { return; }
+    if (!S.token || !canNotify || Notification.permission !== 'granted') return;
+    if (!window.firebase) return toast('Alerts: Firebase did not load');
+    if (!window.FB_CONFIG || /PASTE_/.test(window.FB_CONFIG.apiKey)) return toast('Alerts: firebase-config.js is not filled in');
+    if (!('serviceWorker' in navigator)) return toast('Alerts: this browser has no service worker');
+    try { if (!firebase.apps.length) firebase.initializeApp(window.FB_CONFIG); } catch (e) { return toast('Alerts: ' + e.message); }
     navigator.serviceWorker.ready.then(function (reg) {
       return firebase.messaging().getToken({ vapidKey: window.FB_VAPID, serviceWorkerRegistration: reg });
     }).then(function (t) {
-      if (!t) return;
-      api({ action: 'saveToken', fcm: t, dev: devId() }).catch(function () {});
-    }).catch(function () {});
+      if (!t) return toast('Alerts: Firebase gave no token');
+      return api({ action: 'saveToken', fcm: t, dev: devId() }).then(function (j) {
+        toast(j && j.ok ? 'This phone is registered for alerts' : 'Alerts: server said ' + ((j && j.error) || 'no'));
+      });
+    }).catch(function (e) { if (e && e.message === 'auth') return; toast('Alerts: ' + ((e && (e.code || e.message)) || 'failed')); });
   };
   window.notifyNew = function (title, body) {
     if (!canNotify || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
