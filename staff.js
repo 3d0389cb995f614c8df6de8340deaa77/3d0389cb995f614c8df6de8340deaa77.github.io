@@ -72,7 +72,7 @@ function login(ev) {
     .then(function (j) {
       $('go').disabled = false; $('go').textContent = 'Sign in';
       if (!j.ok) { $('lerr').textContent = j.error || 'Could not sign in'; $('pin').select(); return; }
-      S.token = j.token; S.me = j; store(JSON.stringify({ token: j.token, me: j })); $('pin').value = ''; start();
+      var first = j.list; delete j.list; S.token = j.token; S.me = j; S.pre = first; store(JSON.stringify({ token: j.token, me: j })); $('pin').value = ''; start();
     }).catch(function () { $('go').disabled = false; $('go').textContent = 'Sign in'; $('lerr').textContent = 'No reply from server. Check your internet.'; });
 }
 function logout(msg) {
@@ -85,7 +85,8 @@ function start() {
   $('hname').textContent = S.me.name;
   $('hrole').textContent = S.me.admin ? 'Admin · all bookings' : 'Technician · your bookings';
   $('dev').hidden = !S.me.admin;
-  S.last = Date.now(); skeleton(); refresh();
+  S.last = Date.now();
+  if (S.pre && S.pre.ok) { applyList(S.pre); S.pre = null; } else { skeleton(); refresh(); }
   if (window.syncAlert) window.syncAlert();
 }
 
@@ -97,10 +98,13 @@ function refresh() {
   api({ action: 'list' }).then(function (j) {
     S.loading = false; $('ref').classList.remove('spin');
     if (!j.ok) return toast(j.error || 'Could not load');
-    S.days = { 0: j.days[0] || [], 1: j.days[1] || [] };
-    setPend(j.pend);
-    announceNew(); S.loaded = true; render();
+    applyList(j);
   }).catch(function (e) { S.loading = false; $('ref').classList.remove('spin'); netErr(e); if (!S.loaded) $('list').innerHTML = '<div class="empty">Could not load. Tap refresh.</div>'; });
+}
+function applyList(j) {
+  S.days = { 0: j.days[0] || [], 1: j.days[1] || [] };
+  setPend(j.pend);
+  announceNew(); S.loaded = true; render();
 }
 /* A booking number we have not seen before = a new booking: tell the admin */
 function announceNew() {
@@ -112,7 +116,7 @@ function announceNew() {
     if (fresh.length) {
       toast(fresh.length === 1 ? 'New booking: ' + fresh[0].name : fresh.length + ' new bookings');
       try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (e) {}
-      try { if (document.hidden && window.notifyNew) window.notifyNew('New booking', fresh.length === 1 ? fresh[0].name : fresh.length + ' new bookings'); } catch (e) {}
+      try { if (document.hidden && !S.pushOk && window.notifyNew) window.notifyNew('New booking', fresh.length === 1 ? fresh[0].name : fresh.length + ' new bookings'); } catch (e) {}
     }
   }
   S.seen = nos;
@@ -407,7 +411,7 @@ setInterval(function () {
   if (!S.token) return;
   if (Date.now() - S.last > IDLE_MIN * 60000) return logout('Locked after ' + IDLE_MIN + ' minutes. Sign in again.');
   var ae = document.activeElement;
-  if ((!document.hidden || (window.Notification && Notification.permission === 'granted')) && $('veil').hidden && !(ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) refresh();
+  if ((!document.hidden || (window.Notification && Notification.permission === 'granted' && !S.pushOk)) && $('veil').hidden && !(ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) refresh();
 }, 20000);
 document.addEventListener('visibilitychange', function () { if (!document.hidden && S.token) refresh(); });
 
