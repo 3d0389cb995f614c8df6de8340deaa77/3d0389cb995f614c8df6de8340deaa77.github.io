@@ -433,15 +433,27 @@ try { var saved = JSON.parse(recall() || 'null'); if (saved && saved.token && sa
   $('instBtn').onclick = function () { if (!dp) return; dp.prompt(); dp.userChoice.then(function () { dp = null; $('instBtn').hidden = true; }); };
   showInst();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
-  window.syncAlert = function () { $('alertBar').hidden = !(S.token && canNotify && Notification.permission === 'default'); };
+  window.syncAlert = function () { $('alertBar').hidden = !(S.token && canNotify && Notification.permission === 'default'); if (window.pushRegister) window.pushRegister(); };
   $('alertBtn').onclick = function () {
     if (!canNotify) return;
-    Notification.requestPermission().then(function (p) { window.syncAlert(); if (p === 'granted') toast('Alerts are on'); });
+    Notification.requestPermission().then(function (p) { window.syncAlert(); if (p === 'granted') { toast('Alerts are on'); window.pushRegister(); } });
+  };
+  /* Firebase push: get this phone's token and give it to the server so it can send new-booking alerts */
+  window.pushRegister = function () {
+    if (!S.token || !canNotify || Notification.permission !== 'granted' || !window.firebase || !window.FB_CONFIG || /PASTE_/.test(window.FB_CONFIG.apiKey)) return;
+    if (!('serviceWorker' in navigator)) return;
+    try { if (!firebase.apps.length) firebase.initializeApp(window.FB_CONFIG); } catch (e) { return; }
+    navigator.serviceWorker.ready.then(function (reg) {
+      return firebase.messaging().getToken({ vapidKey: window.FB_VAPID, serviceWorkerRegistration: reg });
+    }).then(function (t) {
+      if (!t) return;
+      api({ action: 'saveToken', fcm: t, dev: devId() }).catch(function () {});
+    }).catch(function () {});
   };
   window.notifyNew = function (title, body) {
     if (!canNotify || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
     navigator.serviceWorker.ready.then(function (reg) {
-      reg.showNotification(title, { body: body, icon: 'images/icon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
+      reg.showNotification(title, { body: body, icon: 'images/favicon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
     });
   };
 })();

@@ -1,5 +1,14 @@
 /* Home Bookings app: keeps the app shell available and shows booking alerts */
-var V = 'hb-v1', SHELL = ['staff.html', 'staff.css?v=7', 'staff.js?v=7', 'images/icon-192.png'];
+importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js', 'firebase-config.js');
+/* Firebase push: the server sends data-only messages, so this is the one place that shows the alert */
+try {
+  firebase.initializeApp(self.FB_CONFIG);
+  firebase.messaging().onBackgroundMessage(function (m) {
+    var d = m.data || {};
+    return self.registration.showNotification(d.title || 'New booking', { body: d.body || '', icon: 'images/favicon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
+  });
+} catch (e) {}
+var V = 'hb-v2', SHELL = ['staff.html', 'staff.css?v=8', 'staff.js?v=8', 'images/favicon-192.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== V; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });
 self.addEventListener('fetch', function (e) {
