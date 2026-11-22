@@ -8,7 +8,7 @@ try {
     return self.registration.showNotification(d.title || 'New booking', { body: d.body || '', icon: 'images/favicon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
   });
 } catch (e) {}
-var V = 'hb-v2', SHELL = ['staff.html', 'staff.css?v=8', 'staff.js?v=8', 'images/favicon-192.png'];
+var V = 'hb-v3', SHELL = ['staff.html', 'staff.css?v=9', 'staff.js?v=9', 'images/favicon-192.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(V).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) { e.waitUntil(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== V; }).map(function (k) { return caches.delete(k); })); }).then(function () { return self.clients.claim(); })); });
 self.addEventListener('fetch', function (e) {

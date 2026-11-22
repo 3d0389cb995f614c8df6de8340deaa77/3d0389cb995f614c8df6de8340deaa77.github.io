@@ -3,7 +3,7 @@
 /* Clickjacking guard: if another site puts this page in a frame, hide it and try to break out. */
 try { if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.self.location; } catch (e2) {} } } catch (e) { document.documentElement.style.display = 'none'; }
 /* 1) YOUR WEB APP URL (ends with /exec) */
-var API_URL = 'https://script.google.com/macros/s/AKfycbzBCcbda8VvoERZwH5_77guqydedZz2Px-vXMOtE1542wK2rPS9CiCtYdHH9OHouI2t/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbyG-pmN4C4GTtt7XSPjm2EpyHtpupz4zDbJReys89k57tw0x7rnnPk-clGEaYpy50Zz/exec';
 var CC = '91';
 var STATUSES = ['Pending', 'Confirmed', 'Called', 'Visited - Unavailable', 'Sample Collected', 'Reached Lab', 'Report Ready', 'Completed', 'Cancelled'];
 var LIVE = ['Confirmed', 'Called', 'Visited - Unavailable'];      // the OTP exists from these statuses on
@@ -76,7 +76,7 @@ function login(ev) {
     }).catch(function () { $('go').disabled = false; $('go').textContent = 'Sign in'; $('lerr').textContent = 'No reply from server. Check your internet.'; });
 }
 function logout(msg) {
-  S.token = ''; S.me = null; S.loaded = false; S.seen = null; S.days = { 0: [], 1: [] }; S.otp = {};
+  S.pushOk = false; S.pushTried = false; S.pushBusy = false; S.token = ''; S.me = null; S.loaded = false; S.seen = null; S.days = { 0: [], 1: [] }; S.otp = {};
   store(null); closeSheet(); $('app').hidden = true; $('login').hidden = false; $('list').innerHTML = '';
   $('lerr').textContent = msg || '';
 }
@@ -433,26 +433,45 @@ try { var saved = JSON.parse(recall() || 'null'); if (saved && saved.token && sa
   $('instBtn').onclick = function () { if (!dp) return; dp.prompt(); dp.userChoice.then(function () { dp = null; $('instBtn').hidden = true; }); };
   showInst();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
-  window.syncAlert = function () { $('alertBar').hidden = !(S.token && canNotify && Notification.permission === 'default'); if (window.pushRegister) window.pushRegister(); };
+  /* Blue bar for EVERY signed-in person (admin and technicians) until this phone is registered for alerts */
+  function barText() {
+    var admin = S.me && S.me.admin, p = canNotify ? Notification.permission : 'denied';
+    if (p === 'denied') return { t: 'Alerts are blocked on this phone. Allow notifications for this site in the browser settings.', b: 'How' };
+    if (p === 'granted') return { t: 'Finish turning on alerts on this phone.', b: 'Turn on' };
+    return { t: admin ? 'Get an alert on this phone for every new booking.' : 'Get an alert on this phone when the admin assigns you a booking.', b: 'Turn on' };
+  }
+  window.syncAlert = function () {
+    var on = !!(S.token && S.me && canNotify && !S.pushOk);
+    $('alertBar').hidden = !on;
+    if (on) { var x = barText(); $('alertBar').querySelector('span').textContent = x.t; $('alertBtn').textContent = x.b; }
+    if (S.token && canNotify && Notification.permission === 'granted' && !S.pushOk && !S.pushTried) window.pushRegister();   // already allowed: register once, quietly
+  };
   $('alertBtn').onclick = function () {
     if (!canNotify) return;
-    Notification.requestPermission().then(function (p) { window.syncAlert(); if (p === 'granted') { toast('Alerts are on'); window.pushRegister(); } });
+    var p = Notification.permission;
+    if (p === 'denied') return toast('Tap the padlock next to the web address, set Notifications to Allow, then reload.');
+    if (p === 'granted') return window.pushRegister();
+    Notification.requestPermission().then(function (r) { if (r === 'granted') window.pushRegister(); else window.syncAlert(); });
   };
-  /* Firebase push: get this phone's token and give it to the server so it can send new-booking alerts */
+  /* Firebase push: get this phone's token and give it to the server so it can send alerts to this person */
   window.pushRegister = function () {
-    if (!S.token || !canNotify || Notification.permission !== 'granted') return;
+    if (!S.token || !canNotify || Notification.permission !== 'granted' || S.pushBusy) return;
+    S.pushTried = true;
     if (!window.firebase) return toast('Alerts: Firebase did not load');
     if (!window.FB_CONFIG || /PASTE_/.test(window.FB_CONFIG.apiKey)) return toast('Alerts: firebase-config.js is not filled in');
     if (!('serviceWorker' in navigator)) return toast('Alerts: this browser has no service worker');
     try { if (!firebase.apps.length) firebase.initializeApp(window.FB_CONFIG); } catch (e) { return toast('Alerts: ' + e.message); }
+    S.pushBusy = true;
     navigator.serviceWorker.ready.then(function (reg) {
       return firebase.messaging().getToken({ vapidKey: window.FB_VAPID, serviceWorkerRegistration: reg });
     }).then(function (t) {
-      if (!t) return toast('Alerts: Firebase gave no token');
+      if (!t) throw new Error('Firebase gave no token');
       return api({ action: 'saveToken', fcm: t, dev: devId() }).then(function (j) {
-        toast(j && j.ok ? 'This phone is registered for alerts' : 'Alerts: server said ' + ((j && j.error) || 'no'));
+        if (!(j && j.ok)) throw new Error('server said ' + ((j && j.error) || 'no'));
+        S.pushOk = true; toast('Alerts are on for this phone');
       });
-    }).catch(function (e) { if (e && e.message === 'auth') return; toast('Alerts: ' + ((e && (e.code || e.message)) || 'failed')); });
+    }).catch(function (e) { if (e && e.message === 'auth') return; toast('Alerts: ' + ((e && (e.code || e.message)) || 'failed')); })
+      .then(function () { S.pushBusy = false; window.syncAlert(); });
   };
   window.notifyNew = function (title, body) {
     if (!canNotify || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
