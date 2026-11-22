@@ -1,5 +1,5 @@
 /* Home Bookings app: keeps the app shell available and shows booking alerts */
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js', 'firebase-config.js');
+try { importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js', 'firebase-config.js'); } catch (e) {}   // if Firebase cannot load, the app still works without push
 /* Firebase push: the server sends data-only messages, so this is the one place that shows the alert */
 try {
   firebase.initializeApp(self.FB_CONFIG);
