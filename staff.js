@@ -480,7 +480,7 @@ try { var saved = JSON.parse(recall() || 'null'); if (saved && saved.token && sa
   window.notifyNew = function (title, body) {
     if (!canNotify || Notification.permission !== 'granted' || !navigator.serviceWorker) return;
     navigator.serviceWorker.ready.then(function (reg) {
-      reg.showNotification(title, { body: body, icon: 'images/favicon-192.png', badge: 'images/favicon-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
+      reg.showNotification(title, { body: body, icon: 'images/icon-512.png', badge: 'images/badge-96.png', tag: 'new-booking', renotify: true, vibrate: [120, 60, 120] });
     });
   };
 })();
