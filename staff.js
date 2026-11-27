@@ -120,6 +120,19 @@ function announceNew() {
     }
   }
   S.seen = nos;
+  remindPending(all);
+}
+/* A booking still "Pending" (not confirmed by the admin) after 15 minutes: remind every 15 minutes until it is confirmed */
+function remindPending(all) {
+  if (!S.me || !S.me.admin) return;
+  S.rem = S.rem || {};
+  var late = all.filter(function (r) { return r.status === 'Pending' && Date.now() - r.ts >= 15 * 60000 && Date.now() - (S.rem[r.no] || 0) >= 15 * 60000; });
+  if (!late.length) return;
+  late.forEach(function (r) { S.rem[r.no] = Date.now(); });
+  var t = late.length === 1 ? late[0].name + ' is still waiting to be confirmed' : late.length + ' bookings are waiting to be confirmed';
+  toast('Reminder: ' + t);
+  try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+  try { if (document.hidden && window.notifyNew) window.notifyNew('Booking not confirmed for 15+ min', t); } catch (e) {}
 }
 
 /* ---------- what each person can do ---------- */
@@ -151,7 +164,7 @@ function card(r) {
   var h = '<article class="card ' + cls(r.status) + (min ? ' min' : '') + (S.busy[r.no] ? ' busy' : '') + (S.fresh[r.no] ? ' fresh' : '') + '" data-no="' + esc(r.no) + '">' +
     '<div class="top" data-a="tog" role="button" tabindex="0" aria-expanded="' + (!min) + '">' +
     '<div class="seq" aria-hidden="true">' + esc(r.seq) + '</div>' +
-    '<div class="who"><h3><span class="nm">' + esc(r.name) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + '</h3><p class="sub">' + sub + '</p></div>' +
+    '<div class="who"><h3><span class="nm">' + esc(r.name) + '</span>' + (isNew ? '<span class="new">NEW</span>' : '') + (r.status === 'Pending' && Date.now() - r.ts >= 15 * 60000 ? '<span class="new" style="background:#c0392b">15+ MIN</span>' : '') + '</h3><p class="sub">' + sub + '</p></div>' +
     '<span class="pill">' + esc(SHORT[r.status] || r.status) + '</span><span class="chev" aria-hidden="true">' + ICON.chev + '</span></div>';
   if (min) {
     if (closed) return h + '</article>';                       // closed cards: one thin row
@@ -166,7 +179,7 @@ function card(r) {
     h += '<p class="wait">' + (r.status === 'Pending' ? 'Waiting for the lab to confirm.' : DONE_FOR_TECH.indexOf(r.status) > -1 ? 'Saved. Only the admin can change this now.' : 'Nothing to do here.') + '</p>';
   }
   if (me.admin) {
-    h += '<div class="tools"><div><label>Assign to</label><select data-a="assign" aria-label="Assign technician"><option value="">Not assigned</option>' +
+    h += '<div class="tools"><div><label>Assign to</label><select data-a="assign" aria-label="Assign technician"' + (r.status === 'Pending' ? ' disabled title="Confirm the booking first"' : '') + '><option value="">' + (r.status === 'Pending' ? 'Confirm first' : 'Not assigned') + '</option>' +
       (me.techs || []).map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.name === r.assigned ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('') + '</select></div>' +
       '<div><label>Status</label><select data-a="status" aria-label="Change status">' + STATUSES.map(function (s) { return '<option' + (s === r.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="more">' + (r.otp ? (S.otp[r.no] ? '<span class="otpchip" aria-label="OTP ' + esc(r.otp) + '">' + esc(r.otp) + '</span>' : '<button class="link" type="button" data-a="otp">Show OTP</button>') : '') +
@@ -383,6 +396,7 @@ document.addEventListener('change', function (e) {
   var s = e.target.closest('select[data-a]'); if (!s) return;
   var no = s.closest('.card').getAttribute('data-no'), v = s.value;
   if (s.getAttribute('data-a') === 'assign') {
+    var pr = findRow(no); if (pr && pr.status === 'Pending') { render(); return toast('Confirm the booking first, then assign a technician.'); }
     S.busy[no] = 1; render();
     api({ action: 'assign', no: no, to: v }).then(function (j) {
       delete S.busy[no];

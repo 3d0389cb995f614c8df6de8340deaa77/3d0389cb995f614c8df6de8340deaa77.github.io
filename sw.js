@@ -1,7 +1,7 @@
 /* Home Bookings app: fast start + reliable booking alerts.
    Alerts are handled by a plain Web Push handler (no Firebase script is loaded here), so they cannot fail
    because a script did not download, and they show even while the app is open on the screen. */
-var V = 'hb-v5', SHELL = ['staff.html', 'staff.css?v=10', 'staff.js?v=11', 'firebase-config.js', 'images/favicon-192.png', 'images/badge-96.png'];
+var V = 'hb-v5', SHELL = ['staff.html', 'staff.css?v=10', 'staff.js?v=12', 'firebase-config.js?v=2', 'images/favicon-192.png', 'images/badge-96.png'];
 
 self.addEventListener('push', function (e) {
   var d = {};
